@@ -1,0 +1,23 @@
+{
+  "name": "riimu/braid-container",
+  "type": "library",
+  "description": "Simplified container for the braid framework",
+  "keywords": ["container"],
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Riikka Kalliomäki",
+      "email": "riikka.kalliomaki@gmail.com",
+      "homepage": "http://riimu.net"
+    }
+  ],
+  "require": {
+    "php": ">=5.6.0",
+    "container-interop/container-interop": "~1.1"
+  },
+  "autoload": {
+    "psr-4": {
+      "Riimu\\Braid\\Container\\": "src/"
+    }
+  }
+}
