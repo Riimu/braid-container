@@ -1,6 +1,6 @@
 <?php
 
-namespace Riimu\Braid\Container;
+namespace Riimu\Braid\Container\Exception;
 
 /**
  * NotFoundException.

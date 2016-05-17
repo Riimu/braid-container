@@ -3,6 +3,8 @@
 namespace Riimu\Braid\Container;
 
 use Interop\Container\ContainerInterface;
+use Interop\Container\Exception\ContainerException;
+use Interop\Container\Exception\NotFoundException;
 
 /**
  * Dependency Injection Container with various value strategies.
@@ -90,7 +92,7 @@ class Container implements ContainerInterface
     private function setEntries(array $entries, $type)
     {
         if (array_intersect_key($entries, $this->values)) {
-            throw new ContainerException("Duplicate entry identifiers");
+            throw new Exception\ContainerException("Duplicate entry identifiers");
         }
 
         $this->values += $entries;
@@ -109,25 +111,36 @@ class Container implements ContainerInterface
      *   - `$container->get('config')['session']['name']`
      *   - `$container->load('config.session.name')`
      *
-     * If the provided identifier path contains no periods, then this method
-     * works exactly the same as the method `get()`.
-     *
      * Note that if a delegate container has been set, the initial lookup is
      * performed on the delegate container.
      *
+     * This method also allows providing a default value that is returned when
+     * the provided path cannot be found within the container. If no default
+     * value has been provided, an exception will be thrown instead.
+     *
      * @param string $path The identifier path to load
+     * @param mixed $default Optional default value if not found
      * @return mixed The value for the path
      * @throws ContainerException If the path contains non-traversable entries
      * @throws NotFoundException If any path entry is not found
      */
-    public function load($path)
+    public function load($path, $default = null)
     {
         $parts = explode('.', (string) $path);
         $container = $this->delegate ?: $this;
-        $value = $container->get(array_shift($parts));
 
-        foreach ($parts as $part) {
-            $value = $this->loadKey($value, $part);
+        try {
+            $value = $container->get(array_shift($parts));
+
+            foreach ($parts as $part) {
+                $value = $this->loadKey($value, $part);
+            }
+        } catch (NotFoundException $exception) {
+            if (func_num_args() === 1) {
+                throw $exception;
+            }
+
+            $value = $default;
         }
 
         return $value;
@@ -166,10 +179,10 @@ class Container implements ContainerInterface
                 return $values[$key];
             }
         } else {
-            throw new ContainerException("Unexpected value encountered in identifier path key '$key'");
+            throw new Exception\ContainerException("Unexpected value encountered in identifier path key '$key'");
         }
 
-        throw new NotFoundException("No entry was found for the identifier path key '$key'");
+        throw new Exception\NotFoundException("No entry was found for the identifier path key '$key'");
     }
 
     /**
@@ -183,7 +196,7 @@ class Container implements ContainerInterface
         $id = (string) $id;
 
         if (!isset($this->types[$id])) {
-            throw new NotFoundException("No entry was found for the identifier '$id'");
+            throw new Exception\NotFoundException("No entry was found for the identifier '$id'");
         }
 
         $value = $this->values[$id];
