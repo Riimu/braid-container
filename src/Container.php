@@ -13,7 +13,7 @@ use Interop\Container\Exception\NotFoundException;
  * @copyright Copyright (c) 2016, Riikka Kalliomäki
  * @license http://opensource.org/licenses/mit-license.php MIT License
  */
-class Container implements ContainerInterface
+class Container implements ContainerInterface, \ArrayAccess
 {
     /** Type for plain value entries */
     const TYPE_VALUE = 1;
@@ -21,22 +21,16 @@ class Container implements ContainerInterface
     /** Type for entries that are values or invokables */
     const TYPE_STANDARD = 2;
 
-    /** Type for entries that are blueprints for classes */
+    /** Type for entries that are blueprints for instances */
     const TYPE_BLUEPRINT = 3;
 
     /** @var ContainerInterface The delegated container */
     private $delegate;
 
-    /**
-     * The types for different container entries.
-     * @var int[]
-     */
+    /** @var int[] The types for different container entries */
     private $types;
 
-    /**
-     * The container entries
-     * @var array
-     */
+    /** @var array The container entries */
     private $values;
 
     /**
@@ -49,7 +43,7 @@ class Container implements ContainerInterface
     }
 
     /**
-     * Sets new container entries.
+     * Sets new standard container entries.
      *
      * A standard entry may either be a plain php value or an invokable that is
      * called with the container as a parameter to initialize the value for the
@@ -57,7 +51,7 @@ class Container implements ContainerInterface
      * returned for further calls.
      *
      * @param array $values Array of container entry id-value pairs
-     * @throws ContainerException If duplicate keys were detected
+     * @throws ContainerException If any of the keys already exists
      */
     public function set(array $values)
     {
@@ -65,10 +59,10 @@ class Container implements ContainerInterface
     }
 
     /**
-     * Sets new container blueprint entries.
+     * Sets new blueprint container entries.
      *
      * A blueprint entry instructs the container how to create the instance for
-     * the entry. The blueprint is an array that must at least have a key
+     * the entry. A blueprint is an array that must at least have the key
      * 'class', which determines the class for the instance. Additional array
      * keys may indicate methods that are called for the class to set it up.
      * The value for these keys must be an array that contains the IDs of the
@@ -76,7 +70,7 @@ class Container implements ContainerInterface
      * identifier path may also be used).
      *
      * @param array $blueprints Array of container id-value pairs.
-     * @throws ContainerException If duplicate keys were detected
+     * @throws ContainerException If any of the keys already exists
      */
     public function setBlueprints(array $blueprints)
     {
@@ -100,7 +94,7 @@ class Container implements ContainerInterface
     }
 
     /**
-     * Loads an container entry using an identifier path.
+     * Loads a container entry using an identifier path.
      *
      * The identifier path is a period separated string, which indicates the
      * entry identifier and the identifiers of further traversed entries. The
@@ -122,7 +116,7 @@ class Container implements ContainerInterface
      * @param mixed $default Optional default value if not found
      * @return mixed The value for the path
      * @throws ContainerException If the path contains non-traversable entries
-     * @throws NotFoundException If any path entry is not found
+     * @throws NotFoundException If any of the entries does not exist
      */
     public function load($path, $default = null)
     {
@@ -161,7 +155,7 @@ class Container implements ContainerInterface
                 return $value[$key];
             }
         } elseif ($value instanceof ContainerInterface) {
-            if (!$value->has($key)) {
+            if ($value->has($key)) {
                 return $value->get($key);
             }
         } elseif ($value instanceof \ArrayAccess) {
@@ -189,7 +183,7 @@ class Container implements ContainerInterface
      * Returns the entry with the given identifier.
      * @param string $id The identifier to find
      * @return mixed The value for the entry
-     * @throws NotFoundException If no entry exists for the key
+     * @throws NotFoundException If no entry exists with the given identifier
      */
     public function get($id)
     {
@@ -231,9 +225,11 @@ class Container implements ContainerInterface
             $instance = new $blueprint['class'];
         }
 
-        $methods = array_diff_key($blueprint, array_flip(['class', '__construct']));
+        foreach ($blueprint as $method => $arguments) {
+            if (in_array($method, ['class', '__construct'])) {
+                continue;
+            }
 
-        foreach ($methods as $method => $arguments) {
             call_user_func_array([$instance, $method], array_map([$this, 'load'], $arguments));
         }
 
@@ -248,5 +244,46 @@ class Container implements ContainerInterface
     public function has($id)
     {
         return isset($this->types[(string) $id]);
+    }
+
+    /**
+     * Tells if the container has an entry with the given identifier.
+     * @param mixed $offset The identifier to find
+     * @return bool True if the entry exists, false if not
+     */
+    public function offsetExists($offset)
+    {
+        return $this->has($offset);
+    }
+
+    /**
+     * Returns the entry with the given identifier.
+     * @param string $offset The identifier to find
+     * @return mixed The value for the entry
+     * @throws NotFoundException If no entry exists with the given identifier
+     */
+    public function offsetGet($offset)
+    {
+        return $this->get($offset);
+    }
+
+    /**
+     * Sets the value for the given identifier as a standard value.
+     * @param string $offset The entry identifier
+     * @param mixed $value The value for the entry
+     */
+    public function offsetSet($offset, $value)
+    {
+        $this->set([(string) $offset => $value]);
+    }
+
+    /**
+     * Removes an entry from the container with the given identifier.
+     * @param string $offset The entry identifier
+     */
+    public function offsetUnset($offset)
+    {
+        unset($this->values[(string) $offset]);
+        unset($this->types[(string) $offset]);
     }
 }
