@@ -39,7 +39,9 @@ class Container implements ContainerInterface, \ArrayAccess
      */
     public function __construct(ContainerInterface $delegate = null)
     {
-        $this->delegate;
+        $this->delegate = $delegate;
+        $this->types = [];
+        $this->values = [];
     }
 
     /**
@@ -59,6 +61,20 @@ class Container implements ContainerInterface, \ArrayAccess
     }
 
     /**
+     * Sets explicit value container entries.
+     *
+     * Value entries are always returned by the container as is and will not
+     * be invoked to return a value, even if the provided values are invokable.
+     *
+     * @param array $values Array of container id-value pairs.
+     * @throws ContainerException If any of the keys already exists
+     */
+    public function setValues(array $values)
+    {
+        $this->setEntries($values, self::TYPE_VALUE);
+    }
+
+    /**
      * Sets new blueprint container entries.
      *
      * A blueprint entry instructs the container how to create the instance for
@@ -68,6 +84,9 @@ class Container implements ContainerInterface, \ArrayAccess
      * The value for these keys must be an array that contains the IDs of the
      * container entries that are passed as arguments to the method (an
      * identifier path may also be used).
+     *
+     * Note that the key 'class' may be omitted from the array if the class is
+     * the same as the identifier for the container entry.
      *
      * @param array $blueprints Array of container id-value pairs.
      * @throws ContainerException If any of the keys already exists
@@ -202,7 +221,7 @@ class Container implements ContainerInterface, \ArrayAccess
 
             $this->types[$id] = self::TYPE_VALUE;
         } elseif ($this->types[$id] === self::TYPE_BLUEPRINT) {
-            $value = $this->values[$id] = $this->createFromBlueprint($value);
+            $value = $this->values[$id] = $this->createFromBlueprint($id);
             $this->types[$id] = self::TYPE_VALUE;
         }
 
@@ -211,18 +230,21 @@ class Container implements ContainerInterface, \ArrayAccess
 
     /**
      * Creates the entry value from the blueprint array.
-     * @param array $blueprint The blueprint for the instance
-     * @return object The instance created from the blueprint
+     * @param array $id The identifier of the entry
+     * @return object The instance created from the entry blueprint
      */
-    private function createFromBlueprint($blueprint)
+    private function createFromBlueprint($id)
     {
+        $blueprint = $this->values[$id];
+        $class = isset($blueprint['class']) ? $blueprint['class'] : $id;
+
         if (isset($blueprint['__construct'])) {
-            $reflection = new \ReflectionClass($blueprint['class']);
+            $reflection = new \ReflectionClass($class);
             $instance = $reflection->newInstanceArgs(
                 array_map([$this, 'load'], $blueprint['__construct'])
             );
         } else {
-            $instance = new $blueprint['class'];
+            $instance = new $class;
         }
 
         foreach ($blueprint as $method => $arguments) {
